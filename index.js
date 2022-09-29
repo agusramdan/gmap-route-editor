@@ -12,6 +12,11 @@ function initMap() {
   let markers=[];
   let waypointResult=[];
   let directionsResult =null;
+  let directionsIndex=0;
+
+  const routeSegmentPanel = document.getElementById("routesegment-panel");
+  const directionPanel = document.getElementById("direction-panel");
+
   const palcesCache = new Map();
 
   const addWayPointResult = function (results){
@@ -41,7 +46,7 @@ function initMap() {
           console.log("old data");
           console.log(data)
           data.address=address;  
-          renderWaypointPanel();
+          renderWaypointsPanel();
         }
       }
     } 
@@ -57,7 +62,7 @@ function initMap() {
   const directionsRenderer = new google.maps.DirectionsRenderer({
     draggable: true,
     map,
-    panel: document.getElementById("panel"),
+    panel: directionPanel,
   });
   
 
@@ -67,9 +72,9 @@ function initMap() {
     const directions = directionsRenderer.getDirections();
     if (directions) {
       directionsResult = directions;
-      setupWaypoint(directions);
-      computeTotalDistance(directions);
-      renderRouteSegment(directions);
+      setupWaypoint();
+      computeTotalDistance();
+      renderRouteSegment();
     }
   });
   
@@ -114,7 +119,7 @@ function initMap() {
       const waypoints  = [];
       if(waypointResult.length >= 2){
         const destinationIndex = waypointResult.length-1;
-        for( let i = 2 ; i < destinationIndex; i++){
+        for( let i = 1 ; i < destinationIndex; i++){
           if(waypointResult[i].stopover){
             waypoints.push(
               {
@@ -128,12 +133,12 @@ function initMap() {
           {
            stopover: true,
            location : waypointMarker.getPosition() ,
-           waypoints: waypoints,
           }
          );
          route={
           start:waypointResult[0].location,
           finish:waypointResult[destinationIndex].location,
+          waypoints: waypoints,
         };
       }else{
         route={
@@ -141,9 +146,7 @@ function initMap() {
           finish:markers[1].getPosition(),
         };
       }
-
-
-
+      
       const calculate=()=>new Promise(( resolve, reject )=>{
         let oReq=Object.assign(
           advReqOptions,
@@ -222,9 +225,9 @@ function initMap() {
       ));
   };
 
-  function computeTotalDistance(result) {
+  function computeTotalDistance() {
     let total = 0;
-    const myroute = result.routes[0];
+    const myroute = directionsResult.routes[directionsIndex];
   
     if (!myroute) {
       return;
@@ -238,66 +241,38 @@ function initMap() {
     document.getElementById("total").innerHTML = total + " km";
   }
 
-  function renderRouteSegment(response) {
+  function renderRouteSegment() {
    
-    const route = response.routes[0];
+    const route = directionsResult.routes[0];
     if (!route) {
       return;
     }
-    
-    document.getElementById("origin").innerHTML=route.legs[0].start_address
-    document.getElementById("destination").innerHTML=route.legs[route.legs.length-1].end_address
 
-    const summaryPanel = document.getElementById("routesegment-panel");
-    
-    let summaryPanelHtml = "";
-    // For each route, display summary information.
-    for (let i = 0; i < route.legs.length; i++) {
-      const routeSegment = i + 1;
-      summaryPanelHtml +=
-        "<b>Route Segment: " + routeSegment + "</b><br>";
-      summaryPanelHtml += route.legs[i].start_address + " <br> Ke <br> ";
-      summaryPanelHtml += route.legs[i].end_address + "<br>";
-      summaryPanelHtml += route.legs[i].distance.text + "<br><br>";
-    }
-    summaryPanel.innerHTML = summaryPanelHtml;
-  }
-  
-  function renderWaypointPanel() {
-   
-    if (!waypointResult) {
-      return;
-    }
-    const summaryPanel = document.getElementById("waypoint-panel");
-    
-    let summaryPanelHtml = "";
-    for (let i = 1; i < waypointResult.length-1; i++) {
-      const poi = waypointResult[i];
-      if(poi.stopover){
-        summaryPanelHtml += " Stoppoint : "
-      }else{
-        summaryPanelHtml += " via : "
+    if(routeSegmentPanel){
+      let summaryPanelHtml = "";
+      // For each route, display summary information.
+      for (let i = 0; i < route.legs.length; i++) {
+        const routeSegment = i + 1;
+        summaryPanelHtml +=
+          "<b>Route Segment: " + routeSegment + "</b><br>";
+        summaryPanelHtml += route.legs[i].start_address + " <br> Ke <br> ";
+        summaryPanelHtml += route.legs[i].end_address + "<br>";
+        summaryPanelHtml += route.legs[i].distance.text + "<br><br>";
       }
+      routeSegmentPanel.innerHTML = summaryPanelHtml;
+    }
 
-      if(poi.address){
-        summaryPanelHtml += poi.address+ "<br><br>"; 
-      }else{
-        summaryPanelHtml += poi.location.toString() + "<br><br>"; 
-      }
-    }
-    summaryPanel.innerHTML = summaryPanelHtml;
   }
 
-  function setupWaypoint(response) {
-    const route = response.routes[0];
+  function setupWaypoint() {
+    const route = directionsResult.routes[directionsIndex];
     if (!route) {
       return;
     }
     waypointResult=[];
-    for (let i = 0; i < response.geocoded_waypoints.length ; i++){
-      waypointResult.push({ place_id: response.geocoded_waypoints[i].place_id,stopover:true })
-      // geocoder.geocode({ placeId: response.geocoded_waypoints[i].place_id }
-      //   ,addWayPointResult);
+    let geocoded_waypoints=directionsResult.geocoded_waypoints;
+    for (let i = 0; i < geocoded_waypoints.length ; i++){
+      waypointResult.push({ place_id: geocoded_waypoints[i].place_id,stopover:true })
     }
     
     let w = 0;
@@ -318,9 +293,9 @@ function initMap() {
     }
     console.log(waypointResult)
     renderWaypointsPanel();
-    renderWaypointPanel()
+
     for (let i = 0; i < waypointResult.length ; i++){
-      const placeId = response.geocoded_waypoints[i].place_id
+      const placeId = geocoded_waypoints[i].place_id
       if(!palcesCache.has(placeId)){
         geocoder.geocode({ placeId: placeId },addPalcesCache);
       }
@@ -332,16 +307,71 @@ function initMap() {
 
     let strContent = "";
     let label='A';
-    for(let i=0;i < waypointResult.length;i++){
-      if(waypointResult[i].stopover){
+    const destinationIndex = waypointResult.length-1;
+
+    let waypoint=waypointResult[0];
+    strContent+= "Origin (";
+    strContent+= label;
+    strContent+= ")";
+    strContent+= ":";
+    strContent+='<input id="wp_place_id_'+waypoint.place_id+'"  name="waypoint" value="';
+    if(waypoint.address){
+      strContent+=waypoint.address;
+    }else{
+      strContent+=waypoint.location.lat;
+      strContent+=",";
+      strContent+=waypoint.location.lng;
+    }
+    strContent+='">'
+    strContent+='<br>';
+    label= String.fromCharCode(label.charCodeAt(0)+1);
+
+    for(let i=1;i < destinationIndex;i++){
+      waypoint=waypointResult[i];
+      if(waypoint.stopover){
+        
+        strContent+= "stopover (";
         strContent+= label;
-        strContent+='<input id="wp_place_id_'+waypointResult[i].place_id+'"  name="waypoint" value="';
-        strContent+=waypointResult[i].address;
+        strContent+= ")";
+        strContent+= ":";
+        strContent+='<input id="wp_place_id_'+waypoint.place_id+'"  name="waypoint" value="';
+        if(waypoint.address){
+          strContent+=waypoint.address;
+        }else{
+          strContent+=waypoint.location.lat;
+          strContent+=",";
+          strContent+=waypoint.location.lng;
+        }
         strContent+='">'
         strContent+='<br>';
         label= String.fromCharCode(label.charCodeAt(0)+1);
+      }else{
+        //strContent+= label;
+        strContent+= " via :";
+        if(waypoint.address){
+          strContent+=waypoint.address;
+        }else{
+          strContent+=waypoint.location.toString();
+        }
+        strContent+='<br>';
       }
     }
+
+    waypoint=waypointResult[destinationIndex];
+    strContent+= "Destination (";
+    strContent+= label;
+    strContent+= ")";
+    strContent+='<input id="wp_place_id_'+waypoint.place_id+'"  name="waypoint" value="';
+    if(waypoint.address){
+      strContent+=waypoint.address;
+    }else{
+      strContent+=waypoint.location.lat;
+      strContent+=",";
+      strContent+=waypoint.location.lng;
+    }
+    strContent+='">'
+    strContent+='<br>';
+    label= String.fromCharCode(label.charCodeAt(0)+1);
     //console.debug( strContent);
     document.getElementById("waypoints-panel").innerHTML = strContent;
   }
